@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.eggs/
+dist/
+build/
+sdist/
+*.egg-info/
+*.whl
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+
+# PyInstaller
+#  Often these are written to the current working directory
+#  or one level below.
+_MEIPASS*
+!**/_MEIPASS*
+#   note: the exclusion above applies even if *_MEIPASS* is
+#   listed earlier in the file.
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.sock
+
+# flit
+flit.ini
+flit.toml
+
+# poetry
+poetry.lock
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# OS or Editor related files
+.DS_Store
+*.swp
+*.swo
+.vscode/

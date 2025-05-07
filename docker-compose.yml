@@ -1,0 +1,13 @@
+version: '3.9'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_DB: placas
+      POSTGRES_USER: placa
+      POSTGRES_PASSWORD: placa
+      POSTGRES_HOST: host.docker.internal
+      POSTGRES_PORT: 5432
