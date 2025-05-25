@@ -48,3 +48,6 @@ poetry.lock
 *.swp
 *.swo
 .vscode/
+
+placas_api/uploaded_images/
+*uploaded_images*
