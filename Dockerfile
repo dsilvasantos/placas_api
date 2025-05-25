@@ -4,6 +4,6 @@ WORKDIR /app
 
 COPY ./app /app
 
-RUN pip install fastapi psycopg2-binary uvicorn
+RUN pip install fastapi psycopg2-binary uvicorn python-multipart
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

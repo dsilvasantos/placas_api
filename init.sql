@@ -7,9 +7,11 @@ CREATE TABLE IF NOT EXISTS capturas (
     id SERIAL PRIMARY KEY,
     placa VARCHAR(10) NOT NULL,
     status VARCHAR(10) NOT NULL,
-    horario TIMESTAMP NOT NULL
+    horario TIMESTAMP NOT NULL,
+    nome_imagem VARCHAR(255) NULL -- Added column for the image filename
 );
 
 grant all PRIVILEGES on placas_autorizadas to placa;
 grant all PRIVILEGES on capturas to placa;
 grant all PRIVILEGES on capturas_id_seq to placa;
+grant all PRIVILEGES on placas_autorizadas_id_seq to placa;
