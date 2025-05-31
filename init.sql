@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS placas_autorizadas (
     id SERIAL PRIMARY KEY,
-    placa VARCHAR(10) UNIQUE NOT NULL
+    placa VARCHAR(7) UNIQUE NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS capturas (
-    placa VARCHAR(10) NOT NULL,
+    placa VARCHAR(7) NOT NULL,
     status VARCHAR(10) NOT NULL,
     horario TIMESTAMP NOT NULL,
 );

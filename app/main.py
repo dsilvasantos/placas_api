@@ -2,14 +2,15 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request, Que
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles # Optional: if you want to serve static files like CSS
-
+from pydantic import BaseModel, Field
+import re
 from datetime import datetime
 import psycopg2
 import os
 import shutil
 from typing import Optional, List, Dict, Any
 
-# --- Existing App Setup ---
+
 app = FastAPI()
 
 DB_CONFIG = {
@@ -23,19 +24,68 @@ DB_CONFIG = {
 UPLOAD_DIRECTORY = "./uploaded_images"
 os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
-# --- NEW: Template Engine Setup ---
 templates = Jinja2Templates(directory="templates")
 
-# --- Optional: Mount static files (e.g., for CSS, JS) ---
-# If you create a 'static' directory for CSS, uncomment the next line
-# app.mount("/static", StaticFiles(directory="static"), name="static")
-# And ensure 'static' directory is in your Docker image.
 
-# --- Existing get_connection function ---
+
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
-# --- Existing Endpoints: /api/placas/{placa} and /api/capturas (POST) ---
+class PlacaAutorizadaPayload(BaseModel):
+    placa: str = Field(
+        ...,
+        min_length=7,
+        max_length=7, 
+        description="Placa do veículo (formato antigo ABC1234 ou Mercosul ABC1D23)."
+    )
+
+@app.post("/api/placas_autorizadas", status_code=201)
+async def cadastrar_placa_autorizada(payload: PlacaAutorizadaPayload):
+    """
+    Registra uma nova placa de veículo como autorizada.
+    A placa deve seguir o formato brasileiro antigo (LLLNNNN) ou Mercosul (LLLNLNN).
+    """
+
+    normalized_placa = payload.placa.strip().upper()
+
+    placa_regex = re.compile(r"^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$|^[A-Z]{3}[0-9]{4}$")
+    if not placa_regex.match(normalized_placa):
+        raise HTTPException(
+            status_code=422, # Unprocessable Entity for validation errors
+            detail="Formato da placa inválido. Use o formato ABC1234 ou ABC1D23."
+        )
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO placas_autorizadas (placa) VALUES (%s) RETURNING id",
+                    (normalized_placa,)
+                )
+                result = cur.fetchone()
+                if result is None:
+                    conn.rollback() 
+                    raise HTTPException(status_code=500, detail="Falha ao registrar a placa e obter o ID.")
+                
+                novo_id = result[0]
+                conn.commit()
+        return {
+            "message": "Placa autorizada cadastrada com sucesso!",
+            "id": novo_id,
+            "placa": normalized_placa
+        }
+    except psycopg2.errors.UniqueViolation:
+        raise HTTPException(
+            status_code=409, # Conflict
+            detail=f"A placa '{normalized_placa}' já está cadastrada."
+        )
+    except psycopg2.Error as db_err:
+        raise HTTPException(status_code=503, detail=f"Erro de banco de dados: {db_err}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro inesperado: {str(e)}")
+
 @app.get("/api/placas/{placa}")
 def verificar_placa(placa: str):
     try:
@@ -60,7 +110,7 @@ async def registrar_captura(
     if imagem and imagem.filename:
         original_filename = os.path.basename(imagem.filename)
 
-    if not original_filename: # Check if filename is valid after os.path.basename
+    if not original_filename: 
         raise HTTPException(status_code=400, detail="Nome de arquivo da imagem inválido.")
 
     try:
@@ -116,6 +166,10 @@ async def web_consulta_placa_page(request: Request):
 async def web_ultimas_capturas_page(request: Request):
     return templates.TemplateResponse("ultimas_capturas.html", {"request": request})
 
+@app.get("/web/cadastro-veiculo", response_class=HTMLResponse)
+async def web_cadastro_veiculo_page(request: Request):
+    return templates.TemplateResponse("cadastro_veiculo.html", {"request": request})
+
 # --- NEW: API Endpoints for Web Pages ---
 
 def format_captura_row(row: tuple) -> Dict[str, Any]:
@@ -134,16 +188,14 @@ async def get_capturas_filtradas(
     data_fim: Optional[datetime] = Query(None),
     status: Optional[str] = Query(None)
 ):
-    # Basic validation: at least one filter should ideally be provided for broad queries,
-    # but for simplicity, we allow fetching all if no filters are given (could be many results).
-    # Consider adding mandatory filters or pagination for production.
+
 
     base_query = "SELECT id, placa, status, horario, nome_imagem FROM capturas" #
     conditions = []
     params = []
 
     if placa:
-        conditions.append("placa ILIKE %s") # Using ILIKE for case-insensitive search
+        conditions.append("placa ILIKE %s") 
         params.append(f"%{placa.upper()}%")
     if status:
         conditions.append("status = %s")
@@ -152,11 +204,6 @@ async def get_capturas_filtradas(
         conditions.append("horario >= %s")
         params.append(data_inicio)
     if data_fim:
-        # To include the whole end day, typically the frontend sends YYYY-MM-DD,
-        # which becomes YYYY-MM-DD 00:00:00. So to include the whole day,
-        # you might need to adjust it to YYYY-MM-DD 23:59:59.999999 or add 1 day and use '<'.
-        # For simplicity with datetime from Query, exact comparison for now.
-        # Or, if data_fim is just a date, you can do: "horario < %s" with data_fim + 1 day.
         conditions.append("horario <= %s")
         params.append(data_fim)
 
@@ -196,9 +243,6 @@ async def get_ultimas_capturas():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Optional: Endpoint to serve uploaded images ---
-# This allows displaying images in the web UI.
-# Ensure UPLOAD_DIRECTORY is correctly mapped if using Docker volumes for persistence.
-# For security, consider validating filenames and ensuring only intended files are served.
+
 if os.path.exists(UPLOAD_DIRECTORY):
     app.mount("/capturas-imagens", StaticFiles(directory=UPLOAD_DIRECTORY), name="capturas-imagens")
